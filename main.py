@@ -14,14 +14,17 @@ language = st.text_input("Language", value='English')
 currency = st.text_input("Currency (if any)", value='%')
 push_length = st.text_input('Push length', value=30)
 push_num = st.text_input('Number of push notifications', value=5)
-
+emoji = st.selectbox(
+    'Do you need emojis in push?',
+    ('Yes', 'No')
+)
 
 client = OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
 )
 
 # Function to generate push notifications
-def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, push_length, push_num):
+def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, push_length, push_num, emoji):
     prompt = f"""
     Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging, use wordplay, and incorporate humor to capture attention. Each notification must be based on the following parameters provided:
 
@@ -43,6 +46,7 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
     3. Ensure the message aligns with the parameters given for each notification.
     4. Aim to capture the reader's interest quickly and motivate them to take action.
     5. Each push notification should be equal or less than {push_length} characters.
+    {"6. Please do not use emojis." if emoji == 'No' else "You can use emojis"}
 
     Generate {push_num} push notifications in {language} language, using these placeholders:
 
@@ -69,7 +73,8 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
 # Button to generate notifications
 if st.button("Generate Push Notifications"):
     if geo and holiday_name and offer and bonus_code and language and currency:
-        notifications = generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, push_length, push_num)
+        notifications = generate_push_notifications(geo, holiday_name, offer, bonus_code, 
+            language, currency, push_length, push_num, emoji)
         st.text_area("Generated Push Notifications", notifications, height=300)
     else:
         st.warning("Please fill in all input fields to generate push notifications.")
