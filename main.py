@@ -4,7 +4,7 @@ import os
 from openai import OpenAI
 
 st.title("Casino & Betting Push Notification Generator")
-
+st.title('UPD')
 # Input fields
 geo = st.text_input("Geo (Geographic Location)", value='United Kingdom')
 holiday_name = st.text_input("Holiday Name (if any)", value='World Cup')
