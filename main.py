@@ -12,7 +12,8 @@ offer = st.text_input("Offer (Value of Bonus Code or Discount)", value=20)
 currency = st.text_input("Currency (if any)", value='%')
 bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
 language = st.text_input("Language", value='English')
-push_length = st.text_input('Push length', value=30)
+push_len = st.text_input('Title length', value=30)
+description_len = st.text_input('Description length', value=40)
 push_num = st.text_input('Number of push notifications', value=5)
 emoji = st.selectbox(
     'Do you need emojis in push?',
@@ -35,10 +36,31 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
     Language: The language in which the notification should be written.
     Currency: The currency relevant to the offer, if applicable.
 
-    Examples:
-    Don't miss this limited-time offer!
-    Brug kampagnekoden THU for at få en 50% bonus op til hele 200 + 100 gratis spins!
-    Use SPIN code today and get up to 100 FREE SPINS for a perfect Monday!
+    Format the response as a JSON array with each notification having a "title" and "description".
+
+    Format:
+    [
+        {{
+            "title": "title_1"
+            "description": "description_1"
+        }}
+    ]
+
+    Example:
+    [
+        {{
+            "title": "BLACK FRIDAY BONUS!"
+            "desctiption": "Pouijte kd BLACKFRIDAY a zskejte 50% up to 2500 CZK + 50 Free Spins"
+        }},
+        {{
+            "title": "Friday bonus: 250 for you",
+            "description": "Make a deposit on Friday and get a 50% BONUS up to 250 + 100 FREE SPINS!"
+        }},
+        {{
+            "title": "Limited-Time Offer",
+            "description": "Don't miss out on this exclusive deal - get a 50% bonus up to 200 + 100 free spins with code THU!"
+        }}
+    ]
 
     Guidelines:
     1. Notifications should be concise and compelling.
@@ -46,10 +68,10 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
     3. Ensure the message aligns with the parameters given for each notification.
     4. Aim to capture the reader's interest quickly and motivate them to take action.
     5. Each push notification should be equal or less than {push_length} characters.
-    {"6. Please do not use emojis." if emoji == 'No' else "You can use emojis"}
+    {"6. Please do not use emojis." if emoji == 'No' else "You can use emojis. But only one in the response."}
+    7. Response in JSON format.
 
     Generate {push_num} push notifications in {language} language, using these placeholders:
-
     1. Geo: {geo}
     2. Holiday Name: {holiday_name}
     3. Offer: {offer}
@@ -68,7 +90,6 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
     )
     notifications = chat_completion.choices[0].message.content
     return notifications
-
 
 # Button to generate notifications
 if st.button("Generate Push Notifications"):
