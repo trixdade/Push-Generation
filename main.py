@@ -12,7 +12,7 @@ offer = st.text_input("Offer (Value of Bonus Code or Discount)", value=20)
 currency = st.text_input("Currency (if any)", value='%')
 bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
 language = st.text_input("Language", value='English')
-push_len = st.text_input('Title length', value=30)
+title_len = st.text_input('Title length', value=30)
 description_len = st.text_input('Description length', value=40)
 push_num = st.text_input('Number of push notifications', value=5)
 emoji = st.selectbox(
@@ -25,7 +25,7 @@ client = OpenAI(
 )
 
 # Function to generate push notifications
-def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, push_length, push_num, emoji):
+def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, title_len, push_num, emoji):
     prompt = f"""
     Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging, use wordplay, and incorporate humor to capture attention. Each notification must be based on the following parameters provided:
 
@@ -67,7 +67,7 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
     2. Incorporate playful language and humor where appropriate.
     3. Ensure the message aligns with the parameters given for each notification.
     4. Aim to capture the reader's interest quickly and motivate them to take action.
-    5. Each push notification should be equal or less than {push_length} characters.
+    5. Each push notification should be equal or less than {title_len} characters.
     {"6. Please do not use emojis." if emoji == 'No' else "You can use emojis. But only one in the response."}
     7. Response in JSON format.
 
@@ -86,7 +86,7 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
             {"role": "user", "content": prompt}
         ],
         model="gpt-4o",
-        max_tokens=int(push_num) * int(push_length)
+        max_tokens=int(push_num) * (int(title_len) + int(description_len))
     )
     notifications = chat_completion.choices[0].message.content
     return notifications
