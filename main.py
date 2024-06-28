@@ -25,7 +25,8 @@ client = OpenAI(
 )
 
 # Function to generate push notifications
-def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, currency, title_len, push_num, emoji):
+def generate_push_notifications(geo, holiday_name, offer, currency, 
+                                bonus_code, language, title_len, description_len, push_num, emoji):
     prompt = f"""
     Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging, use wordplay, and incorporate humor to capture attention. Each notification must be based on the following parameters provided:
 
@@ -94,8 +95,8 @@ def generate_push_notifications(geo, holiday_name, offer, bonus_code, language, 
 # Button to generate notifications
 if st.button("Generate Push Notifications"):
     if geo and holiday_name and offer and bonus_code and language and currency:
-        notifications = generate_push_notifications(geo, holiday_name, offer, bonus_code, 
-            language, currency, push_length, push_num, emoji)
+        notifications = generate_push_notifications(geo, holiday_name, offer, currency, 
+                                bonus_code, language, title_len, description_len, push_num, emoji)
         st.text_area("Generated Push Notifications", notifications, height=300)
     else:
         st.warning("Please fill in all input fields to generate push notifications.")
