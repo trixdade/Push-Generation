@@ -4,6 +4,7 @@ import os
 from openai import OpenAI
 import pandas as pd
 import json
+import datetime
 
 st.title("Casino & Betting Push Notification Generator")
 
@@ -30,6 +31,12 @@ client = OpenAI(
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
                                 bonus_code, language, title_len, description_len, push_num, emoji, user_reg):
+    
+    character_padding = 3
+
+    title_len = int(title_len) - character_padding
+    description_len = int(description_len) - character_padding
+    
     prompt = f"""
     Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging and highlighting that the offer is time-limited.
     Include a strong call to action, use wordplay, and incorporate humor to capture attention. 
@@ -73,11 +80,11 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     2. Incorporate playful language and humor where appropriate.
     3. Ensure the message aligns with the parameters given for each notification.
     4. Aim to capture the reader's interest quickly and motivate them to take action.
-    5. Each push notification should be equal or less than {title_len} characters.
-    6. You can write value of the bonus in the title if it is impressive.
-    7. {"Please do not use emojis." if emoji == 'No' else "You can use emojis. But only one in the response."}
-    8. Response in JSON format.
-    9. {" Please do not use emojis." if user_reg else "You can use emojis. But only one in the response."}
+    5. Each push notification title should be equal or less than {title_len} characters.
+    6. Each push notification description should be less than {description_len} characters
+    7. You can write value of the bonus in the title if it is impressive.
+    8. {"Please do not use emojis." if emoji == 'No' else "You should use emojis. Each push should have one."}
+    9. Response in JSON format.
 
     Generate {push_num} push notifications in {language} language, using these placeholders:
     1. Geo: {geo}
@@ -104,13 +111,27 @@ if st.button("Generate Push Notifications"):
     if geo and holiday_name and offer and bonus_code and language and currency:
         notifications = generate_push_notifications(geo, holiday_name, offer, currency, 
                                 bonus_code, language, title_len, description_len, push_num, emoji, user_reg)
+
         try:
-            notifications_json = json.loads(notifications)
+            l = notifications.find('```json')
+            r = notifications.rfind('```')
+            notifications_clean = notifications[l+len('```json'):r]
+            notifications_json = json.loads(notifications_clean)
+
             df = pd.DataFrame(notifications_json)
-            st.text_area("Generated Push Notifications", notifications, height=300)
+            df['title_len'] = df.title.apply(len)
+            df['description_len'] = df.description.apply(len)
+
+            #st.text_area("Generated Push Notifications", notifications, height=300)
             st.dataframe(df)
-        except json.JSONDecodeError:
-            st.error("Failed to parse JSON. Try to generate again.")
+        except:
+            # save to file with datetime
+            now = datetime.datetime.now()
+            dt_string = now.strftime("%Y%m%d-%H%M%S")
+            filename = f'notifications_{dt_string}.txt'
+            with open(filename, 'w') as f:
+                f.write(notifications)
+
     else:
         st.warning("Please fill in all input fields to generate push notifications.")
 
