@@ -1,2 +1,7 @@
 *.csv
 *.ipynb
+*.txt
+*.json
+*.md
+
+.streamlit
