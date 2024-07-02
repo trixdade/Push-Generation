@@ -2,6 +2,8 @@ import streamlit as st
 import openai
 import os
 from openai import OpenAI
+import pandas as pd
+import json
 
 st.title("Casino & Betting Push Notification Generator")
 
@@ -19,6 +21,7 @@ emoji = st.selectbox(
     'Do you need emojis in push?',
     ('Yes', 'No')
 )
+user_reg = st.checkbox('User registered?')
 
 client = OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
@@ -26,9 +29,11 @@ client = OpenAI(
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num, emoji):
+                                bonus_code, language, title_len, description_len, push_num, emoji, user_reg):
     prompt = f"""
-    Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging, use wordplay, and incorporate humor to capture attention. Each notification must be based on the following parameters provided:
+    Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging and highlighting that the offer is time-limited.
+    Include a strong call to action, use wordplay, and incorporate humor to capture attention. 
+    Each notification must be based on the following parameters provided:
 
     Geo: The geographic location of the target audience.
     Holiday Name: The name of a holiday if there is one, to make the message relevant to current events.
@@ -69,8 +74,10 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     3. Ensure the message aligns with the parameters given for each notification.
     4. Aim to capture the reader's interest quickly and motivate them to take action.
     5. Each push notification should be equal or less than {title_len} characters.
-    {"6. Please do not use emojis." if emoji == 'No' else "You can use emojis. But only one in the response."}
-    7. Response in JSON format.
+    6. You can write value of the bonus in the title if it is impressive.
+    7. {"Please do not use emojis." if emoji == 'No' else "You can use emojis. But only one in the response."}
+    8. Response in JSON format.
+    9. {" Please do not use emojis." if user_reg else "You can use emojis. But only one in the response."}
 
     Generate {push_num} push notifications in {language} language, using these placeholders:
     1. Geo: {geo}
@@ -96,8 +103,14 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
 if st.button("Generate Push Notifications"):
     if geo and holiday_name and offer and bonus_code and language and currency:
         notifications = generate_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num, emoji)
-        st.text_area("Generated Push Notifications", notifications, height=300)
+                                bonus_code, language, title_len, description_len, push_num, emoji, user_reg)
+        try:
+            notifications_json = json.loads(notifications)
+            df = pd.DataFrame(notifications_json)
+            st.text_area("Generated Push Notifications", notifications, height=300)
+            st.dataframe(df)
+        except json.JSONDecodeError:
+            st.error("Failed to parse JSON. Try to generate again.")
     else:
         st.warning("Please fill in all input fields to generate push notifications.")
 
