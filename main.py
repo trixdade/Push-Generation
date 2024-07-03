@@ -113,9 +113,9 @@ if st.button("Generate Push Notifications"):
                                 bonus_code, language, title_len, description_len, push_num, emoji, user_reg)
 
         try:
-            l = notifications.find('```json')
-            r = notifications.rfind('```')
-            notifications_clean = notifications[l+len('```json'):r]
+            l = notifications.find('```json') + len('```json') if notifications.find('```json') != -1 else 0
+            r = notifications.rfind('```') if notifications.find('```') != -1 else len(notifications)
+            notifications_clean = notifications[l:r]
             notifications_json = json.loads(notifications_clean)
 
             df = pd.DataFrame(notifications_json)
