@@ -22,11 +22,64 @@ emoji = st.selectbox(
     'Do you need emojis in push?',
     ('Yes', 'No')
 )
+source = st.selectbox(
+    'What source do you want to use?',
+    ('20bet', '22bet', 'Bizzo Casino', 'National Casino')
+)
+
+if source in ['20bet', '22bet']:
+    source_text = f'Betting named {source}'
+elif source in ['Bizzo Casino', 'National Casino']:
+    source_text = f'Casino named {source}'
+
 user_reg = st.checkbox('User registered?')
 
 client = OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
 )
+
+examples_for_prompt = """
+        {{
+            "title": "🎰Add 50FS to your WelcomePack"
+            "desctiption": "Enter code 'THRILL'! Offer ends soon!💰"
+        }},
+        {{
+            "title": "Welcome Pack Boost|+50FS more",
+            "description": "Use code FROG|Slot of the Week Edition🐸"
+        }},
+        {{
+            "title": "🎰National Casino Fest|Add 50FS",
+            "description": "Type FEST for boost! Deal expires SOON💰"
+        }}
+""" if not user_reg else """
+        {{
+            "title": "🎰Summer Fest + 50% up to 100€"
+            "desctiption": "Type FEST & join the fun! Limited time⏱️"
+        }},
+        {{
+            "title": "🎰Vegas Weekend| Add Xtra 50FS",
+            "description": "Type VEGAS for boosted deal! Ends SOON💰"
+        }},
+        {{
+            "title": "🦸Bizzo | Use HERO for rewards",
+            "description": "Superheroes Day w/ Super Prizes at Bizzo"
+        }}
+"""
+
+emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
+emoji_examples_betting = "They could be based on input parameters."
+
+emoji_examples = emoji_examples_casino 
+if source in ['20bet', '22bet']:
+    emoji_examples = emoji_examples_betting
+else:
+    emoji_examples = emoji_examples_casino
+
+if emoji == 'No':
+    emoji_text = "Please do not use emojis."
+else:
+    emoji_text = "You should use emojis. Each push should have one." + emoji_examples
+
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
@@ -38,8 +91,9 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     description_len = int(description_len) - character_padding
     
     prompt = f"""
-    Task: Write short, creative push notifications for a casino and betting project. Notifications should be engaging and highlighting that the offer is time-limited.
-    Include a strong call to action, use wordplay, and incorporate humor to capture attention. 
+    Task: Write short, creative push notifications for a {source_text}. Notifications should be engaging and highlighting that the offer is time-limited.
+    Include a strong call to action (Get/Claim/Join/Enter code/Type/Use etc.), use wordplay, and incorporate humor to capture attention. 
+    It is important to let the user know, that the offer is from {source_text}. It could be shown in text or emoji. In betting it could be done, by using the words "bet" or "odds". In casino it could be done, by using the words "casino", "slot", "free spins", "FS".
     Each notification must be based on the following parameters provided:
 
     Geo: The geographic location of the target audience.
@@ -50,7 +104,6 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     Currency: The currency relevant to the offer, if applicable.
 
     Format the response as a JSON array with each notification having a "title" and "description".
-
     Format:
     [
         {{
@@ -60,20 +113,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     ]
 
     Example:
-    [
-        {{
-            "title": "BLACK FRIDAY BONUS!"
-            "desctiption": "Pouijte kd BLACKFRIDAY a zskejte 50% up to 2500 CZK + 50 Free Spins"
-        }},
-        {{
-            "title": "Friday bonus: 250 for you",
-            "description": "Make a deposit on Friday and get a 50% BONUS up to 250 + 100 FREE SPINS!"
-        }},
-        {{
-            "title": "Limited-Time Offer",
-            "description": "Don't miss out on this exclusive deal - get a 50% bonus up to 200 + 100 free spins with code THU!"
-        }}
-    ]
+    {examples_for_prompt}
 
     Guidelines:
     1. Notifications should be concise and compelling.
@@ -83,8 +123,9 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Each push notification title should be equal or less than {title_len} characters.
     6. Each push notification description should be less than {description_len} characters
     7. You can write value of the bonus in the title if it is impressive.
-    8. {"Please do not use emojis." if emoji == 'No' else "You should use emojis. Each push should have one."}
-    9. Response in JSON format.
+    8. Write that offer is limited if applicable. For example, Offer ends soon/Time is limited/Now/Deal expires SOON/Deal Expire Tomorrow/ONLY TODAY/Code is only valid TODAY and etc.)
+    9. {emoji_text}
+    10. Response in JSON format.
 
     Generate {push_num} push notifications in {language} language, using these placeholders:
     1. Geo: {geo}
@@ -97,7 +138,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
 
     chat_completion = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are a creative copywriter specializing in short, engaging push notifications."},
+            {"role": "system", "content": "You are a creative copywriter specializing in generating engaging push notifications."},
             {"role": "user", "content": prompt}
         ],
         model="gpt-4o",
