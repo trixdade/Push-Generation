@@ -26,18 +26,14 @@ source = st.selectbox(
     'What source do you want to use?',
     ('20bet', '22bet', 'Bizzo Casino', 'National Casino')
 )
-
-if source in ['20bet', '22bet']:
-    source_text = f'Betting named {source}'
-elif source in ['Bizzo Casino', 'National Casino']:
-    source_text = f'Casino named {source}'
-
 user_reg = st.checkbox('User registered?')
+
 
 client = OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
 )
 
+# Dynamic Examples
 examples_for_prompt = """
         {{
             "title": "🎰Add 50FS to your WelcomePack"
@@ -66,6 +62,13 @@ examples_for_prompt = """
         }}
 """
 
+# Dynamic Source
+if source in ['20bet', '22bet']:
+    source_text = f'Betting named {source}'
+elif source in ['Bizzo Casino', 'National Casino']:
+    source_text = f'Casino named {source}'
+
+# Dynamic Emojis
 emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
 emoji_examples_betting = "They could be based on input parameters."
 
@@ -83,7 +86,7 @@ else:
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num, emoji, user_reg):
+                                bonus_code, language, title_len, description_len, push_num):
     
     character_padding = 3
 
@@ -150,8 +153,17 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
 # Button to generate notifications
 if st.button("Generate Push Notifications"):
     if geo and holiday_name and offer and bonus_code and language and currency:
-        notifications = generate_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num, emoji, user_reg)
+        notifications = generate_push_notifications(
+            geo, 
+            holiday_name, 
+            offer, 
+            currency, 
+            bonus_code, 
+            language, 
+            title_len, 
+            description_len, 
+            push_num
+        )
 
         try:
             l = notifications.find('```json') + len('```json') if notifications.find('```json') != -1 else 0
