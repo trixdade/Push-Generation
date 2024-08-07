@@ -5,3 +5,5 @@
 *.md
 
 .streamlit
+.DS_Store
+catboost_info
