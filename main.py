@@ -1,7 +1,5 @@
 import streamlit as st
 import openai
-import os
-from openai import OpenAI
 import pandas as pd
 import json
 import datetime
@@ -29,59 +27,64 @@ source = st.selectbox(
 user_reg = st.checkbox('User registered?')
 
 
-client = OpenAI(
+client = openai.OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
 )
 
-# Dynamic Examples
-examples_for_prompt = """
-        {{
-            "title": "🎰Add 50FS to your WelcomePack"
-            "desctiption": "Enter code 'THRILL'! Offer ends soon!💰"
-        }},
-        {{
+def get_examples(user_reg):
+    if not user_reg:
+        return """
+        {
+            "title": "🎰Add 50FS to your WelcomePack",
+            "description": "Enter code 'THRILL'! Offer ends soon!💰"
+        },
+        {
             "title": "Welcome Pack Boost|+50FS more",
             "description": "Use code FROG|Slot of the Week Edition🐸"
-        }},
-        {{
+        },
+        {
             "title": "🎰National Casino Fest|Add 50FS",
             "description": "Type FEST for boost! Deal expires SOON💰"
-        }}
-""" if not user_reg else """
-        {{
-            "title": "🎰Summer Fest + 50% up to 100€"
-            "desctiption": "Type FEST & join the fun! Limited time⏱️"
-        }},
-        {{
+        }
+        """
+    else:
+        return """
+        {
+            "title": "🎰Summer Fest + 50% up to 100€",
+            "description": "Type FEST & join the fun! Limited time⏱️"
+        },
+        {
             "title": "🎰Vegas Weekend| Add Xtra 50FS",
             "description": "Type VEGAS for boosted deal! Ends SOON💰"
-        }},
-        {{
+        },
+        {
             "title": "🦸Bizzo | Use HERO for rewards",
             "description": "Superheroes Day w/ Super Prizes at Bizzo"
-        }}
-"""
+        }
+        """
 
-# Dynamic Source
-if source in ['20bet', '22bet']:
-    source_text = f'Betting named {source}'
-elif source in ['Bizzo Casino', 'National Casino']:
-    source_text = f'Casino named {source}'
+examples_for_prompt = get_examples(user_reg)
 
-# Dynamic Emojis
-emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
-emoji_examples_betting = "They could be based on input parameters."
+def get_source_text(source):
+    if source in ['20bet', '22bet']:
+        return f'Betting named {source}'
+    else:
+        return f'Casino named {source}'
 
-emoji_examples = emoji_examples_casino 
-if source in ['20bet', '22bet']:
-    emoji_examples = emoji_examples_betting
-else:
-    emoji_examples = emoji_examples_casino
+source_text = get_source_text(source)
 
-if emoji == 'No':
-    emoji_text = "Please do not use emojis."
-else:
-    emoji_text = "You should use emojis. Each push should have one." + emoji_examples
+def get_emoji_text(emoji, source):
+    emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
+    emoji_examples_betting = "They could be based on input parameters."
+
+    emoji_examples = emoji_examples_casino if source not in ['20bet', '22bet'] else emoji_examples_betting
+
+    if emoji == 'No':
+        return "Please do not use emojis."
+    else:
+        return "You should use emojis. Each push should have one." + emoji_examples
+
+emoji_text = get_emoji_text(emoji, source)
 
 
 # Function to generate push notifications
@@ -177,7 +180,7 @@ if st.button("Generate Push Notifications"):
 
             #st.text_area("Generated Push Notifications", notifications, height=300)
             st.dataframe(df)
-        except:
+        except json.JSONDecodeError:
             # save to file with datetime
             now = datetime.datetime.now()
             dt_string = now.strftime("%Y%m%d-%H%M%S")
@@ -186,5 +189,5 @@ if st.button("Generate Push Notifications"):
                 f.write(notifications)
 
     else:
-        st.warning("Please fill in all input fields to generate push notifications.")
+        st.warning("Please fill in all input fields to generate push notifications or type None in needed field.")
 
