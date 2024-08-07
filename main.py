@@ -96,7 +96,8 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     title_len = int(title_len) - character_padding
     description_len = int(description_len) - character_padding
     
-    prompt = f"""
+    system_prompt = f"""You are a creative copywriter specializing in generating engaging push notifications.
+    
     Task: Write short, creative push notifications for a {source_text}. Notifications should be engaging and highlighting that the offer is time-limited.
     Include a strong call to action (Get/Claim/Join/Enter code/Type/Use etc.), use wordplay, and incorporate humor to capture attention. 
     It is important to let the user know, that the offer is from {source_text}. It could be shown in text or emoji. In betting it could be done, by using the words "bet" or "odds". In casino it could be done, by using the words "casino", "slot", "free spins", "FS".
@@ -122,17 +123,19 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     {examples_for_prompt}
 
     Guidelines:
-    1. Notifications should be concise and compelling.
-    2. Incorporate playful language and humor where appropriate.
-    3. Ensure the message aligns with the parameters given for each notification.
-    4. Aim to capture the reader's interest quickly and motivate them to take action.
-    5. Each push notification title should be equal or less than {title_len} characters.
-    6. Each push notification description should be less than {description_len} characters
-    7. You can write value of the bonus in the title if it is impressive.
-    8. Write that offer is limited if applicable. For example, Offer ends soon/Time is limited/Now/Deal expires SOON/Deal Expire Tomorrow/ONLY TODAY/Code is only valid TODAY and etc.)
-    9. {emoji_text}
-    10. Response in JSON format.
-
+    1. Notifications should be concise and compelling.\n
+    2. Incorporate playful language and humor where appropriate.\n
+    3. Ensure the message aligns with the parameters given for each notification.\n
+    4. Aim to capture the reader's interest quickly and motivate them to take action.\n
+    5. Each push notification title should be equal or less than {title_len} characters.\n
+    6. Each push notification description should be less than {description_len} characters\n
+    7. You can write value of the bonus in the title if it is impressive.\n
+    8. Write that offer is limited if applicable. For example, Offer ends soon/Time is limited/Now/Deal expires SOON/Deal Expire Tomorrow/ONLY TODAY/Code is only valid TODAY and etc.)\n
+    9. {emoji_text}\n
+    10. Response in JSON format.\n
+    """
+    
+    user_prompt = f"""
     Generate {push_num} push notifications in {language} language, using these placeholders:
     1. Geo: {geo}
     2. Holiday Name: {holiday_name}
@@ -144,11 +147,12 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
 
     chat_completion = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are a creative copywriter specializing in generating engaging push notifications."},
-            {"role": "user", "content": prompt}
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
         ],
         model="gpt-4o",
-        max_tokens=int(push_num) * (int(title_len) + int(description_len))
+        max_tokens=int(push_num) * (int(title_len) + int(description_len)),
+        response_format={"type": "json_object"}
     )
     notifications = chat_completion.choices[0].message.content
     return notifications
@@ -169,10 +173,7 @@ if st.button("Generate Push Notifications"):
         )
 
         try:
-            l = notifications.find('```json') + len('```json') if notifications.find('```json') != -1 else 0
-            r = notifications.rfind('```') if notifications.find('```') != -1 else len(notifications)
-            notifications_clean = notifications[l:r]
-            notifications_json = json.loads(notifications_clean)
+            notifications_json = json.loads(notifications)['notifications']
 
             df = pd.DataFrame(notifications_json)
             df['title_len'] = df.title.apply(len)
