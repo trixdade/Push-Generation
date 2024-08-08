@@ -7,11 +7,11 @@ import datetime
 st.title("Casino & Betting Push Notification Generator")
 
 # Input fields
-geo = st.text_input("Geo (Geographic Location)", value='United Kingdom')
-holiday_name = st.text_input("Holiday Name (if any)", value='World Cup')
-offer = st.text_input("Offer (Value of Bonus Code or Discount)", value=20)
-currency = st.text_input("Currency (if any)", value='%')
-bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
+geo = st.text_input("Geo (Geographic Location)", value='United Kingdom or None')
+holiday_name = st.text_input("Holiday Name (if any)", value='World Cup or None')
+offer = st.text_input("Offer (Value of Bonus Code or Discount)", value='20 or None')
+currency = st.text_input("Currency (if any)", value='% or None')
+bonus_code = st.text_input("Bonus Code (if any)", value='CUP20 or None')
 language = st.text_input("Language", value='English')
 title_len = st.text_input('Title length', value=30)
 description_len = st.text_input('Description length', value=40)
