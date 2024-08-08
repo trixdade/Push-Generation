@@ -39,11 +39,11 @@ def get_examples(user_reg):
             "description": "Enter code 'THRILL'! Offer ends soon!💰"
         },
         {
-            "title": "Welcome Pack Boost|+50FS more",
+            "title": "🎲Welcome Pack Boost|+50FS more",
             "description": "Use code FROG|Slot of the Week Edition🐸"
         },
         {
-            "title": "🎰National Casino Fest|Add 50FS",
+            "title": "🎲National Casino Fest|Add 50FS",
             "description": "Type FEST for boost! Deal expires SOON💰"
         }
         """
@@ -73,6 +73,39 @@ def get_source_text(source):
 
 source_text = get_source_text(source)
 
+emoji_rules = """
+There are the rules of how to place emojis properly:
+1. If push contains words "Promotion, Offer, Deal, Reward, Special, Regular" 
+then use these emojis: 💡 ⚡ 💯 🫶 🙌 ✅ ✨ 🎇 💪 💖 🆕 🆓 💸 💵 📣 🔆 🔜 
+
+2. If push contains words "Spins, Jackpot, Slots, Games, Bet, Place a bet" 
+then use these emojis: 🎰 🎲  
+
+3. If push contains words "Money, Cash, Prize, Payout, Reward"
+then use these emojis: 💸 💵 💰 
+
+4. If push contains words "Birthday, Anniversary, Celebration, Party, Festival, Fest, Holiday, Special Day" 
+then use these emojis: 🎂 🥳 🎈 🎇 🎆 🪩 
+
+5. If push contains words "VIP, Exclusive, High Roller, Elite, Premier, Luxury, Privilege" 
+then use these emojis: 👑 💎 🎯 🏆 🎇
+
+6. If push contains words "Match, Game, Tournament, Championship, League, Contest, Competition"
+then use these emojis: ⚽ 🥇 🏆 💪 and countries flags
+
+7. If push contains words "Time-Limited, Limited, Hurry, Ends Soon, Time is running out, Only TODAY, Today only, Now, Last Chance" 
+then use these emojis: ⏳ ⏰ 🔔 ⌛ ⏱️ 🔜
+
+8. If push contains words "Summer, Wildwest, Oktoberfest, Sweet, Seasonal, Holiday, Festival"
+then use these emojis: 🤠 🏖️ 🍺 🍬 🍭 🌠 🎇 🎆 🪄  🪩 and countries flags (if it is local holiday)
+
+9. If push contains words "Unique, Special, Exclusive, Grand, Huge" 
+then use these emojis: 🧨 💣 💥 ⚡
+
+10. If push contains words "New, Fresh, Special, Launch, Release, Introduce, Unveiling"
+then use these emojis: 🆕 📣 💎💡 
+"""
+
 def get_emoji_text(emoji, source):
     emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
     emoji_examples_betting = "They could be based on input parameters."
@@ -80,9 +113,9 @@ def get_emoji_text(emoji, source):
     emoji_examples = emoji_examples_casino if source not in ['20bet', '22bet'] else emoji_examples_betting
 
     if emoji == 'No':
-        return "Please do not use emojis."
+        return "Make sure you do not use emojis."
     else:
-        return "You should use emojis. Each push should have one." + emoji_examples
+        return "You must use emojis based on the generated text." + '\n' + emoji_rules
 
 emoji_text = get_emoji_text(emoji, source)
 
@@ -116,6 +149,10 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
         {{
             "title": "title_1"
             "description": "description_1"
+        }}, 
+        {{
+            "title": "title_2"
+            "description": "description_2"
         }}
     ]
 
@@ -130,9 +167,11 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Each push notification title should be equal or less than {title_len} characters.\n
     6. Each push notification description should be less than {description_len} characters\n
     7. You can write value of the bonus in the title if it is impressive.\n
-    8. Write that offer is limited if applicable. For example, Offer ends soon/Time is limited/Now/Deal expires SOON/Deal Expire Tomorrow/ONLY TODAY/Code is only valid TODAY and etc.)\n
+    8. Write that offer is limited if applicable. For example, add phrases like Offer ends soon, 
+    Time is limited, Now, Deal expires SOON, Deal Expire Tomorrow, ONLY TODAY, Code is only valid TODAY and etc.\n
     9. {emoji_text}\n
-    10. Response in JSON format.\n
+    10. {"Skip." if user_reg else f"You have to let people know, that this is push from {source_text.lower()}. Also, you could add that user have to register to use promocode, if applicable."}\n
+    11. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -144,7 +183,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Language: {language}
     6. Currency: {currency}
     """
-
+    
     chat_completion = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_prompt},
@@ -152,9 +191,9 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
         ],
         model="gpt-4o",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
-        response_format={"type": "json_object"}
+        response_format={"type": "text"}
     )
-    notifications = chat_completion.choices[0].message.content
+    notifications = chat_completion
     return notifications
 
 # Button to generate notifications
@@ -173,11 +212,10 @@ if st.button("Generate Push Notifications"):
         )
 
         try:
-            notifications_json = json.loads(notifications)['notifications']
-
+            notifications_content = notifications.choices[0].message.content
+            notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
+            notifications_json = json.loads(notifications_clear)
             df = pd.DataFrame(notifications_json)
-            df['title_len'] = df.title.apply(len)
-            df['description_len'] = df.description.apply(len)
 
             #st.text_area("Generated Push Notifications", notifications, height=300)
             st.dataframe(df)
