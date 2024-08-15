@@ -22,7 +22,7 @@ bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
 language = st.text_input("Language", value='English')
 title_len = st.text_input('Title length', value=30)
 description_len = st.text_input('Description length', value=50)
-push_num = st.text_input('Number of push notifications', value=5)
+push_num = int(st.text_input('Number of push notifications', value=5))
 emoji = st.selectbox(
     'Do you need emojis in push?',
     ('Yes', 'No')
@@ -190,7 +190,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Language: {language}
     6. Currency: {currency}
     """
-    
+
     chat_completion = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_prompt},
@@ -198,37 +198,47 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
         ],
         model="gpt-4o",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
-        response_format={"type": "text"}
+        response_format={"type": "text"},
+        temperature=0.2
     )
     notifications = chat_completion
     return notifications
 
 # Button to generate notifications
 if st.button("Generate Push Notifications"): 
-    notifications = generate_push_notifications(
-        geo, 
-        holiday_name, 
-        offer, 
-        currency, 
-        bonus_code, 
-        language, 
-        title_len, 
-        description_len, 
-        push_num
-    )
+    batch_size = 15
+    whole_df = pd.DataFrame([])
+    for i in range(0, push_num, batch_size):
+        current_push_num = min(batch_size, push_num - i)
+        print(f"Generating notifications {i + 1} to {i + current_push_num}")
+        st.write(f"Generating notifications {i + 1} to {i + current_push_num}")
+        notifications = generate_push_notifications(
+            geo, 
+            holiday_name, 
+            offer, 
+            currency, 
+            bonus_code, 
+            language, 
+            title_len, 
+            description_len, 
+            current_push_num
+        )
+        
+        try:
+            notifications_content = notifications.choices[0].message.content
+            notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
+            notifications_json = json.loads(notifications_clear)
+            df = pd.DataFrame(notifications_json)
+            whole_df = pd.concat([whole_df, df])
 
-    try:
-        notifications_content = notifications.choices[0].message.content
-        notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
-        notifications_json = json.loads(notifications_clear)
-        df = pd.DataFrame(notifications_json)
+        except json.JSONDecodeError:
+            # save to file with datetime
+            now = datetime.datetime.now()
+            dt_string = now.strftime("%Y%m%d-%H%M%S")
+            filename = f'notifications_{dt_string}.txt'
+            with open(filename, 'w') as f:
+                f.write(notifications)
+             
+    whole_df = whole_df.reset_index(drop=True)
+    st.dataframe(whole_df)
 
-        #st.text_area("Generated Push Notifications", notifications, height=300)
-        st.dataframe(df)
-    except json.JSONDecodeError:
-        # save to file with datetime
-        now = datetime.datetime.now()
-        dt_string = now.strftime("%Y%m%d-%H%M%S")
-        filename = f'notifications_{dt_string}.txt'
-        with open(filename, 'w') as f:
-            f.write(notifications)
