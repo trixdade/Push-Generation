@@ -115,15 +115,10 @@ then use these emojis: 🆕 📣 💎💡
 """
 
 def get_emoji_text(emoji, source):
-    emoji_examples_casino = "🎰 for title and 💰🤑⏱️ for the description"
-    emoji_examples_betting = "They could be based on input parameters."
-
-    emoji_examples = emoji_examples_casino if source not in ['20bet', '22bet'] else emoji_examples_betting
-
     if emoji == 'No':
         return "Make sure you do not use emojis."
     else:
-        return "You must use emojis based on the generated text." + '\n' + emoji_rules
+        return "You must use emojis based on the generated text. Please DO NOT use more than 1 emoji in title!" + '\n' + emoji_rules
 
 emoji_text = get_emoji_text(emoji, source)
 
