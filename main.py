@@ -6,15 +6,22 @@ import datetime
 
 st.title("Casino & Betting Push Notification Generator")
 
+
+language = 'English'
+title_len = 30
+description_len = 50
+push_num = 5
+geo, holiday_name, offer, currency, bonus_code = None, None, None, None, None
+
 # Input fields
-geo = st.text_input("Geo (Geographic Location)", value='United Kingdom or None')
-holiday_name = st.text_input("Holiday Name (if any)", value='World Cup or None')
-offer = st.text_input("Offer (Value of Bonus Code or Discount)", value='20 or None')
-currency = st.text_input("Currency (if any)", value='% or None')
-bonus_code = st.text_input("Bonus Code (if any)", value='CUP20 or None')
+geo = st.text_input("Geo (Geographic Location)", value='United Kingdom')
+holiday_name = st.text_input("Holiday Name (if any)", value='World Cup')
+offer = st.text_input("Offer (Value of Bonus Code or Discount)", value='20')
+currency = st.text_input("Currency (if any)", value='%')
+bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
 language = st.text_input("Language", value='English')
 title_len = st.text_input('Title length', value=30)
-description_len = st.text_input('Description length', value=40)
+description_len = st.text_input('Description length', value=50)
 push_num = st.text_input('Number of push notifications', value=5)
 emoji = st.selectbox(
     'Do you need emojis in push?',
@@ -197,36 +204,31 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     return notifications
 
 # Button to generate notifications
-if st.button("Generate Push Notifications"):
-    if geo and holiday_name and offer and bonus_code and language and currency:
-        notifications = generate_push_notifications(
-            geo, 
-            holiday_name, 
-            offer, 
-            currency, 
-            bonus_code, 
-            language, 
-            title_len, 
-            description_len, 
-            push_num
-        )
+if st.button("Generate Push Notifications"): 
+    notifications = generate_push_notifications(
+        geo, 
+        holiday_name, 
+        offer, 
+        currency, 
+        bonus_code, 
+        language, 
+        title_len, 
+        description_len, 
+        push_num
+    )
 
-        try:
-            notifications_content = notifications.choices[0].message.content
-            notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
-            notifications_json = json.loads(notifications_clear)
-            df = pd.DataFrame(notifications_json)
+    try:
+        notifications_content = notifications.choices[0].message.content
+        notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
+        notifications_json = json.loads(notifications_clear)
+        df = pd.DataFrame(notifications_json)
 
-            #st.text_area("Generated Push Notifications", notifications, height=300)
-            st.dataframe(df)
-        except json.JSONDecodeError:
-            # save to file with datetime
-            now = datetime.datetime.now()
-            dt_string = now.strftime("%Y%m%d-%H%M%S")
-            filename = f'notifications_{dt_string}.txt'
-            with open(filename, 'w') as f:
-                f.write(notifications)
-
-    else:
-        st.warning("Please fill in all input fields to generate push notifications or type None in needed field.")
-
+        #st.text_area("Generated Push Notifications", notifications, height=300)
+        st.dataframe(df)
+    except json.JSONDecodeError:
+        # save to file with datetime
+        now = datetime.datetime.now()
+        dt_string = now.strftime("%Y%m%d-%H%M%S")
+        filename = f'notifications_{dt_string}.txt'
+        with open(filename, 'w') as f:
+            f.write(notifications)
