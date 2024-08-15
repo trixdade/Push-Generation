@@ -3,6 +3,7 @@ import openai
 import pandas as pd
 import json
 import datetime
+from utils.emoji import remove_unnecessary_emojis
 
 st.title("Casino & Betting Push Notification Generator")
 
@@ -226,6 +227,10 @@ if st.button("Generate Push Notifications"):
             notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
             notifications_json = json.loads(notifications_clear)
             df = pd.DataFrame(notifications_json)
+            
+            # remove other than first emoji from title
+            df.title = df.title.apply(remove_unnecessary_emojis)
+            
             whole_df = pd.concat([whole_df, df])
 
         except json.JSONDecodeError:

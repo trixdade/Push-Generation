@@ -3,6 +3,7 @@
 *.txt
 *.json
 *.md
+*.pyc
 
 .streamlit
 .DS_Store
