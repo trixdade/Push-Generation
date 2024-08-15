@@ -42,12 +42,12 @@ def get_examples(user_reg):
     if not user_reg:
         return """
         {
-            "title": "🎰Add 50FS to your WelcomePack",
-            "description": "Enter code 'THRILL'! Offer ends soon!💰"
+            "title": "🎰Add 50FS to your Welcome Pack",
+            "description": "THRILL! Register and enter code. Offer ends soon!💰"
         },
         {
             "title": "🎲Welcome Pack Boost|+50FS more",
-            "description": "Use code FROG|Slot of the Week Edition🐸"
+            "description": "Register and use code FROG|Slot of the Week Edition🐸"
         },
         {
             "title": "🎲National Casino Fest|Add 50FS",
@@ -140,13 +140,14 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     
     Task: Write short, creative push notifications for a {source_text}. Notifications should be engaging and highlighting that the offer is time-limited.
     Include a strong call to action (Get/Claim/Join/Enter code/Type/Use etc.), use wordplay, and incorporate humor to capture attention. 
-    It is important to let the user know, that the offer is from {source_text}. It could be shown in text or emoji. In betting it could be done, by using the words "bet" or "odds". In casino it could be done, by using the words "casino", "slot", "free spins", "FS".
+    It is important to let the user know, that the offer is from {source_text}. It could be shown in text or emoji. 
+    In betting it could be done, by using the words "bet" or "odds". In casino it could be done, by using the words "casino", "slot", "free spins", "FS".
     Each notification must be based on the following parameters provided:
 
     Geo: The geographic location of the target audience.
     Holiday Name: The name of a holiday if there is one, to make the message relevant to current events.
-    Offer: The actual value of the bonus code or discount being offered.
-    Bonus Code: A specific code to be used if there is one.
+    Offer: The actual value of the bonus code or discount being offered. Could be in %, but limited in some currency.
+    Bonus Code: A specific code to be used if there is one. Don't make up your own bonus code.
     Language: The language in which the notification should be written.
     Currency: The currency relevant to the offer, if applicable.
 
@@ -174,11 +175,13 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Each push notification title should be equal or less than {title_len} characters.\n
     6. Each push notification description should be less than {description_len} characters\n
     7. You can write value of the bonus in the title if it is impressive.\n
-    8. Write that offer is limited if applicable. For example, add phrases like Offer ends soon, 
+    8. Write that offer is limited if applicable. For example, you can add phrases like Offer ends soon, 
     Time is limited, Now, Deal expires SOON, Deal Expire Tomorrow, ONLY TODAY, Code is only valid TODAY and etc.\n
     9. {emoji_text}\n
-    10. {"Skip." if user_reg else f"You have to let people know, that this is push from {source_text.lower()}. Also, you could add that user have to register to use promocode, if applicable."}\n
-    11. Response in JSON list format.\n
+    10. If there is None instead of promocode then don't made up yours promocode. It's just call to play and to make user open app.
+    11. {"Skip." if user_reg else f"You have to let people know, that this is push from {source_text.lower()}. Also, you could add that user have to register to use promocode, if applicable."}\n
+    12. If there is a promocode, it should be in the beginning of the description.
+    13. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -199,7 +202,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
         model="gpt-4o",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
         response_format={"type": "text"},
-        temperature=0.2
+        temperature=0.4
     )
     notifications = chat_completion
     return notifications
@@ -241,4 +244,3 @@ if st.button("Generate Push Notifications"):
              
     whole_df = whole_df.reset_index(drop=True)
     st.dataframe(whole_df)
-
