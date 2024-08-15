@@ -11,14 +11,15 @@ language = 'English'
 title_len = 30
 description_len = 50
 push_num = 5
-geo, holiday_name, offer, currency, bonus_code = None, None, None, None, None
+geo, holiday_name, offer, currency = None, None, None, None
 
 # Input fields
 geo = st.text_input("Geo (Geographic Location)", value='United Kingdom')
 holiday_name = st.text_input("Holiday Name (if any)", value='World Cup')
 offer = st.text_input("Offer (Value of Bonus Code or Discount)", value='20')
 currency = st.text_input("Currency (if any)", value='%')
-bonus_code = st.text_input("Bonus Code (if any)", value='CUP20')
+bonus_check = st.checkbox("Bonus Code")
+bonus_code = st.text_input("Enter bonus code", value='CUP20') if bonus_check else None
 language = st.text_input("Language", value='English')
 title_len = st.text_input('Title length', value=30)
 description_len = st.text_input('Description length', value=50)
@@ -178,10 +179,9 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     8. Write that offer is limited if applicable. For example, you can add phrases like Offer ends soon, 
     Time is limited, Now, Deal expires SOON, Deal Expire Tomorrow, ONLY TODAY, Code is only valid TODAY and etc.\n
     9. {emoji_text}\n
-    10. If there is None instead of promocode then don't made up yours promocode. It's just call to play and to make user open app.
+    10. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Add bonus code {bonus_code} somewhere in beginning of the description."}
     11. {"Skip." if user_reg else f"You have to let people know, that this is push from {source_text.lower()}. Also, you could add that user have to register to use promocode, if applicable."}\n
-    12. If there is a promocode, it should be in the beginning of the description.
-    13. Response in JSON list format.\n
+    12. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -213,7 +213,6 @@ if st.button("Generate Push Notifications"):
     whole_df = pd.DataFrame([])
     for i in range(0, push_num, batch_size):
         current_push_num = min(batch_size, push_num - i)
-        print(f"Generating notifications {i + 1} to {i + current_push_num}")
         st.write(f"Generating notifications {i + 1} to {i + current_push_num}")
         notifications = generate_push_notifications(
             geo, 
