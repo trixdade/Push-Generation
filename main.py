@@ -45,15 +45,15 @@ def get_examples(user_reg):
         return """
         {
             "title": "🎰Add 50FS to your Welcome Pack",
-            "description": "THRILL! Register and enter code. Offer ends soon!💰"
+            "description": "THRILL! Register and enter code. Limited!💰"
         },
         {
-            "title": "🎲Welcome Pack Boost|+50FS more",
+            "title": "🎰Welcome Pack Boost|+50FS more",
             "description": "Register and use code FROG|Slot of the Week Edition🐸"
         },
         {
             "title": "🎲National Casino Fest|Add 50FS",
-            "description": "Type FEST for boost! Deal expires SOON💰"
+            "description": "Join and type FEST for boost! Hurry⏱️"
         }
         """
     else:
@@ -73,14 +73,6 @@ def get_examples(user_reg):
         """
 
 examples_for_prompt = get_examples(user_reg)
-
-def get_source_text(source):
-    if source in ['20bet', '22bet']:
-        return f'Betting named {source}'
-    else:
-        return f'Casino named {source}'
-
-source_text = get_source_text(source)
 
 emoji_rules = """
 There are the rules of how to place emojis properly:
@@ -115,38 +107,65 @@ then use these emojis: 🧨 💣 💥 ⚡
 then use these emojis: 🆕 📣 💎💡 
 """
 
-def get_emoji_text(emoji, source):
+def get_emoji_text(emoji):
     if emoji == 'No':
         return "Make sure you do not use emojis."
     else:
         return "You must use emojis based on the generated text. Please DO NOT use more than 1 emoji in title!" + '\n' + emoji_rules
 
-emoji_text = get_emoji_text(emoji, source)
+emoji_text = get_emoji_text(emoji)
+
+def get_reg_text(user_reg, source):
+    reg_text = 'Be sure that you done all the guidelines.'
+    if not user_reg:
+        if source in ['20bet', '22bet']: 
+            reg_text += f"""You must let user know, that this is notification from {source}. Add this name somewhere.
+            Be sure that you do it."""
+        else:
+            reg_text += f"""You must let user know, that this is notification from casino.
+            Do it by adding slot emoji (🎰) in the beginning or by using words 
+            like casino, bet, odds, free spins or just add the name of casino: {source}. 
+            Be sure that you do it."""
+        
+    if bonus_check:
+        bonus_check_text = f"You could mention, that user should register to enter bonus code: {bonus_code}"
+        reg_text += f'\n{bonus_check_text}' 
+            
+    return reg_text
+    
+reg_text = get_reg_text(user_reg=user_reg, source=source)
+
+
+# POSTPROCESSING FUNCS
+def filter_dataframe_by_offer(df, columns, offer):
+    mask = df[columns].apply(lambda row: any(offer in str(row[col]) for col in columns), axis=1)
+    
+    # Фильтрация датафрейма по маске
+    filtered_df = df[mask]
+    return filtered_df
 
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
                                 bonus_code, language, title_len, description_len, push_num):
     
-    character_padding = 3
+    character_padding = 5
 
     title_len = int(title_len) - character_padding
     description_len = int(description_len) - character_padding
     
     system_prompt = f"""You are a creative copywriter specializing in generating engaging push notifications.
     
-    Task: Write short, creative push notifications for a {source_text}. Notifications should be engaging and highlighting that the offer is time-limited.
-    Include a strong call to action (Get/Claim/Join/Enter code/Type/Use etc.), use wordplay, and incorporate humor to capture attention. 
-    It is important to let the user know, that the offer is from {source_text}. It could be shown in text or emoji. 
-    In betting it could be done, by using the words "bet" or "odds". In casino it could be done, by using the words "casino", "slot", "free spins", "FS".
+    Task: Write short, creative push notifications for a project name {source}. Notifications should be engaging and highlighting that the offer is time-limited.
+    Include a strong call to action, e.g. get/claim/join/enter/type/use. Use wordplay and incorporate humor to capture attention. 
     Each notification must be based on the following parameters provided:
 
     Geo: The geographic location of the target audience.
-    Holiday Name: The name of a holiday if there is one, to make the message relevant to current events.
+    Holiday Name: The name of a holiday or some special day if there is one, to make the message relevant to current events. Could be sports events, classic holidays or just special days.
     Offer: The actual value of the bonus code or discount being offered. Could be in %, but limited in some currency.
-    Bonus Code: A specific code to be used if there is one. Don't make up your own bonus code.
-    Language: The language in which the notification should be written.
     Currency: The currency relevant to the offer, if applicable.
+    Bonus Code: A specific code to be used if there is one. Don't make up your own bonus code.
+    Language: The language in which the notifications should be written.
 
     Format the response as a JSON array with each notification having a "title" and "description".
     Format:
@@ -172,12 +191,14 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     5. Each push notification title should be equal or less than {title_len} characters.\n
     6. Each push notification description should be less than {description_len} characters\n
     7. You can write value of the bonus in the title if it is impressive.\n
-    8. Write that offer is limited if applicable. For example, you can add phrases like Offer ends soon, 
-    Time is limited, Now, Deal expires SOON, Deal Expire Tomorrow, ONLY TODAY, Code is only valid TODAY and etc.\n
+    8. Properly write offer, word by word. Don't split the words within.
+    9. Write that offer is limited if applicable. Add phrases like offer ends soon, 
+    time is limited, NOW, deal expires SOON, ONLY TODAY and etc. Try to make this time-related text short.\n
     9. {emoji_text}\n
-    10. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Add bonus code {bonus_code} somewhere in beginning of the description."}
-    11. {"Skip." if user_reg else f"You have to let people know, that this is push from {source_text.lower()}. Also, you could add that user have to register to use promocode, if applicable."}\n
-    12. Response in JSON list format.\n
+    10. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description."}
+    11. {reg_text}
+    12. Please make sure that you wrote Offer fully word by word. Do not split it, just paste it somewhere.
+    13. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -188,6 +209,8 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     4. Bonus Code: {bonus_code}
     5. Language: {language}
     6. Currency: {currency}
+    
+    Make sure, that you fully add {offer} into every description or title.
     """
 
     chat_completion = client.chat.completions.create(
@@ -207,9 +230,12 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
 if st.button("Generate Push Notifications"): 
     batch_size = 15
     whole_df = pd.DataFrame([])
-    for i in range(0, push_num, batch_size):
-        current_push_num = min(batch_size, push_num - i)
-        st.write(f"Generating notifications {i + 1} to {i + current_push_num}")
+    total_push_num = push_num
+    generated_count = 0
+    while generated_count < total_push_num:
+        current_push_num = min(batch_size, total_push_num - generated_count)
+        st.write(f"Generating notifications {generated_count + 1} to {generated_count + current_push_num}")
+        
         notifications = generate_push_notifications(
             geo, 
             holiday_name, 
@@ -222,24 +248,29 @@ if st.button("Generate Push Notifications"):
             current_push_num
         )
         
-        try:
-            notifications_content = notifications.choices[0].message.content
-            notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
-            notifications_json = json.loads(notifications_clear)
-            df = pd.DataFrame(notifications_json)
-            
-            # remove other than first emoji from title
-            df.title = df.title.apply(remove_unnecessary_emojis)
-            
-            whole_df = pd.concat([whole_df, df])
+        notifications_content = notifications.choices[0].message.content
+        notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
+        notifications_json = json.loads(notifications_clear)
+        df = pd.DataFrame(notifications_json)
 
-        except json.JSONDecodeError:
-            # save to file with datetime
-            now = datetime.datetime.now()
-            dt_string = now.strftime("%Y%m%d-%H%M%S")
-            filename = f'notifications_{dt_string}.txt'
-            with open(filename, 'w') as f:
-                f.write(notifications)
+        # Удаление лишних эмодзи из заголовка
+        df.title = df.title.apply(remove_unnecessary_emojis)
+        
+        # Фильтрация строк без оффера
+        df_offer = filter_dataframe_by_offer(df, 
+                                             columns=['title', 'description'], 
+                                             offer=offer)
+        
+        removed_count = df.shape[0] - df_offer.shape[0]
+        st.write(f'Removed {removed_count} without offer')
+        
+        # Обновляем количество сгенерированных уведомлений
+        generated_count += df_offer.shape[0]
+        whole_df = pd.concat([whole_df, df_offer])
+        
+        # Если были удаленные строки, пересчитываем их для генерации
+        if removed_count > 0:
+            st.write(f"Regenerating {removed_count} notifications...")
              
     whole_df = whole_df.reset_index(drop=True)
     st.dataframe(whole_df)
