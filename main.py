@@ -3,6 +3,7 @@ import openai
 import pandas as pd
 import json
 import datetime
+import re
 from utils.emoji import remove_unnecessary_emojis
 
 st.title("Casino & Betting Push Notification Generator")
@@ -144,12 +145,46 @@ def filter_dataframe_by_offer(df, columns, offer):
     filtered_df = df[mask]
     return filtered_df
 
+def len_with_emojis(text):
+    """
+    Подсчитывает длину строки, учитывая, что каждый эмодзи считается за 2 символа.
+    
+    :param text: Строка, длину которой нужно подсчитать.
+    :return: Длина строки с учетом эмодзи.
+    """
+    # Регулярное выражение для поиска эмодзи
+    emoji_pattern = re.compile(
+        "[\U0001F600-\U0001F64F"  # Эмодзи со смайликами
+        "\U0001F300-\U0001F5FF"  # Символы и пиктограммы
+        "\U0001F680-\U0001F6FF"  # Транспортные средства и символы
+        "\U0001F1E0-\U0001F1FF"  # Флаги (с помощью пар региональных индикаторов)
+        "\U00002702-\U000027B0"  # Разные символы и пиктограммы
+        "\U000024C2-\U0001F251"  # Другие символы
+        "]+", flags=re.UNICODE)
+
+    # Находим все эмодзи в тексте
+    emojis = emoji_pattern.findall(text)
+    
+    # Считаем длину строки
+    total_length = len(text)
+    
+    # Корректируем длину, добавляя 1 за каждый эмодзи
+    emoji_count = len(emojis)
+    adjusted_length = total_length + emoji_count
+    
+    return adjusted_length
+
+def filter_dataframe_by_length(df, title_len, description_len):
+    mask = (df['title'].apply(len_with_emojis) <= title_len) & (df['description'].apply(len_with_emojis) <= description_len)
+    filtered_df = df[mask]
+    return filtered_df
+
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
                                 bonus_code, language, title_len, description_len, push_num):
     
-    character_padding = 5
+    character_padding = 2
 
     title_len = int(title_len) - character_padding
     description_len = int(description_len) - character_padding
@@ -190,15 +225,16 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     4. Aim to capture the reader's interest quickly and motivate them to take action.\n
     5. Each push notification title should be equal or less than {title_len} characters.\n
     6. Each push notification description should be less than {description_len} characters\n
-    7. You can write value of the bonus in the title if it is impressive.\n
-    8. Properly write offer, word by word. Don't split the words within.
-    9. Write that offer is limited if applicable. Add phrases like offer ends soon, 
+    7. Each emoji is 2 characters, so be aware of it.
+    8. You can write value of the bonus in the title if it is impressive.\n
+    9. Properly write offer, word by word. Don't split the words within.
+    10. Write that offer is limited if applicable. Add phrases like offer ends soon, 
     time is limited, NOW, deal expires SOON, ONLY TODAY and etc. Try to make this time-related text short.\n
-    9. {emoji_text}\n
-    10. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description."}
-    11. {reg_text}
-    12. Please make sure that you wrote Offer fully word by word. Do not split it, just paste it somewhere.
-    13. Response in JSON list format.\n
+    11. {emoji_text}\n
+    12. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description."}
+    13. {reg_text}
+    14. Please make sure that you wrote Offer fully word by word. Do not split it, just paste it somewhere.
+    15. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -261,16 +297,23 @@ if st.button("Generate Push Notifications"):
                                              columns=['title', 'description'], 
                                              offer=offer)
         
-        removed_count = df.shape[0] - df_offer.shape[0]
-        st.write(f'Removed {removed_count} without offer')
+        removed_offer_count = df.shape[0] - df_offer.shape[0]
+        st.write(f'Removed {removed_offer_count} without offer')
         
+        # Фильтрация строк по длине title и description
+        df_valid_length = filter_dataframe_by_length(df_offer, title_len=int(title_len), description_len=int(description_len))
+        removed_length_count = df_offer.shape[0] - df_valid_length.shape[0]
+        st.write(f'Removed {removed_length_count} due to length constraints')
+        
+        st.write(f'-------------------------------------------------------------')
         # Обновляем количество сгенерированных уведомлений
-        generated_count += df_offer.shape[0]
-        whole_df = pd.concat([whole_df, df_offer])
+        generated_count += df_valid_length.shape[0]
+        whole_df = pd.concat([whole_df, df_valid_length])
         
+        removed_total = removed_offer_count + removed_length_count
         # Если были удаленные строки, пересчитываем их для генерации
-        if removed_count > 0:
-            st.write(f"Regenerating {removed_count} notifications...")
+        if removed_total > 0:
+            st.write(f"Regenerating {removed_total} notifications...")
              
     whole_df = whole_df.reset_index(drop=True)
     st.dataframe(whole_df)
