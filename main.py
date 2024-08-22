@@ -23,8 +23,8 @@ currency = st.text_input("Currency (if any)", value='%')
 bonus_check = st.checkbox("Bonus Code")
 bonus_code = st.text_input("Enter bonus code", value='CUP20') if bonus_check else None
 language = st.text_input("Language", value='English')
-title_len = st.text_input('Title length', value=30)
-description_len = st.text_input('Description length', value=50)
+title_len = int(st.text_input('Title length', value=30))
+description_len = int(st.text_input('Description length', value=50))
 push_num = int(st.text_input('Number of push notifications', value=5))
 emoji = st.selectbox(
     'Do you need emojis in push?',
@@ -80,7 +80,7 @@ There are the rules of how to place emojis properly:
 1. If push contains words "Promotion, Offer, Deal, Reward, Special, Regular" 
 then use these emojis: 💡 ⚡ 💯 🫶 🙌 ✅ ✨ 🎇 💪 💖 🆕 🆓 💸 💵 📣 🔆 🔜 
 
-2. If push contains words "Spins, Jackpot, Slots, Games, Bet, Place a bet" 
+2. If push contains words "Casino, Spins, Jackpot, Slots, Games, Bet, Place a bet" 
 then use these emojis: 🎰 🎲  
 
 3. If push contains words "Money, Cash, Prize, Payout, Reward"
@@ -180,6 +180,42 @@ def filter_dataframe_by_length(df, title_len, description_len):
     return filtered_df
 
 
+def replace_abbr(df, title_len, description_len):
+    df['title_len'] = df['title'].apply(len_with_emojis)
+    df['description_len'] = df['description'].apply(len_with_emojis)
+    
+    # free spins addition
+    fs_len = len(' Free Spins') - len('FS')
+    code_len = len(' code')
+    # add the word 'code' if applicable 
+    if bonus_check:
+        df.title = df.apply(lambda row: row.title.replace(bonus_code, bonus_code + ' code') 
+                            if row.title_len + code_len < title_len else row.title, axis=1)
+        
+        df.description = df.apply(lambda row: row.description.replace(bonus_code, bonus_code + ' code') 
+                                if row.description_len + code_len < description_len else row.description, axis=1)
+    
+    # refresh length
+    df['title_len'] = df['title'].apply(len_with_emojis)
+    df['description_len'] = df['description'].apply(len_with_emojis)
+    
+    # change FS 
+    df.title = df.apply(lambda row: row.title.replace('FS', ' Free Spins') 
+                        if row.title_len + fs_len < title_len else row.title, axis=1)
+    
+    df.description = df.apply(lambda row: row.description.replace('FS', ' Free Spins') 
+                              if row.description_len + fs_len < description_len else row.description, axis=1)
+    
+    # remove whitespaces
+    cols = ['title', 'description']
+    df[cols] = df[cols].apply(lambda x: x.str.strip())
+    
+    # remove created cols
+    df = df.drop(columns=['title_len', 'description_len'])
+
+    return df
+
+
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
                                 bonus_code, language, title_len, description_len, push_num):
@@ -229,12 +265,13 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     8. You can write value of the bonus in the title if it is impressive.\n
     9. Properly write offer, word by word. Don't split the words within.
     10. Write that offer is limited if applicable. Add phrases like offer ends soon, 
-    time is limited, NOW, deal expires SOON, ONLY TODAY and etc. Try to make this time-related text short.\n
+    time is limited, now, deal expires soon, only today and etc. Try to make this time-related text short.\n
     11. {emoji_text}\n
     12. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description."}
     13. {reg_text}
     14. Please make sure that you wrote Offer fully word by word. Do not split it, just paste it somewhere.
-    15. Response in JSON list format.\n
+    15. Put bonus code in the beggining of title or description, do not put it at the end.
+    16. Response in JSON list format.\n
     """
     
     user_prompt = f"""
@@ -247,6 +284,12 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     6. Currency: {currency}
     
     Make sure, that you fully add {offer} into every description or title.
+    
+    Prority in push:
+    1. Add call to action
+    2. Try to incorporate Holiday Name creatively when generating the text
+    3. Point out that offer is time limited
+    4. Other rules
     """
 
     chat_completion = client.chat.completions.create(
@@ -257,7 +300,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
         model="gpt-4o",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
         response_format={"type": "text"},
-        temperature=0.4
+        temperature=0.1
     )
     notifications = chat_completion
     return notifications
@@ -288,11 +331,13 @@ if st.button("Generate Push Notifications"):
         notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
         notifications_json = json.loads(notifications_clear)
         df = pd.DataFrame(notifications_json)
-
+        
         # Удаление лишних эмодзи из заголовка
+        print('удаляем эмодзи')
         df.title = df.title.apply(remove_unnecessary_emojis)
         
         # Фильтрация строк без оффера
+        print('фильтруем без оффера')
         df_offer = filter_dataframe_by_offer(df, 
                                              columns=['title', 'description'], 
                                              offer=offer)
@@ -301,13 +346,19 @@ if st.button("Generate Push Notifications"):
         st.write(f'Removed {removed_offer_count} without offer')
         
         # Фильтрация строк по длине title и description
-        df_valid_length = filter_dataframe_by_length(df_offer, title_len=int(title_len), description_len=int(description_len))
+        df_valid_length = filter_dataframe_by_length(df_offer, title_len=title_len, description_len=description_len)
         removed_length_count = df_offer.shape[0] - df_valid_length.shape[0]
         st.write(f'Removed {removed_length_count} due to length constraints')
         
         st.write(f'-------------------------------------------------------------')
         # Обновляем количество сгенерированных уведомлений
         generated_count += df_valid_length.shape[0]
+        
+        
+        # убираем сокращения там, где это возможно
+        print('убираем сокращения')
+        df_valid_length = replace_abbr(df_valid_length, title_len=title_len, description_len=description_len)
+        
         whole_df = pd.concat([whole_df, df_valid_length])
         
         removed_total = removed_offer_count + removed_length_count
@@ -316,4 +367,7 @@ if st.button("Generate Push Notifications"):
             st.write(f"Regenerating {removed_total} notifications...")
              
     whole_df = whole_df.reset_index(drop=True)
+    
+    whole_df['title_len'] = whole_df['title'].apply(len_with_emojis)
+    whole_df['description_len'] = whole_df['description'].apply(len_with_emojis)
     st.dataframe(whole_df)
