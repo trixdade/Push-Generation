@@ -11,7 +11,7 @@ st.title("Casino & Betting Push Notification Generator")
 
 language = 'English'
 title_len = 30
-description_len = 50
+description_len = 40
 push_num = 5
 geo, holiday_name, offer, currency = None, None, None, None
 
@@ -24,7 +24,7 @@ bonus_check = st.checkbox("Bonus Code")
 bonus_code = st.text_input("Enter bonus code", value='CUP20') if bonus_check else None
 language = st.text_input("Language", value='English')
 title_len = int(st.text_input('Title length', value=30))
-description_len = int(st.text_input('Description length', value=50))
+description_len = int(st.text_input('Description length', value=40))
 push_num = int(st.text_input('Number of push notifications', value=5))
 emoji = st.selectbox(
     'Do you need emojis in push?',
