@@ -435,11 +435,11 @@ if st.button("Generate Push Notifications"):
     generated_count = 0
     message = st.empty()
     generation_count_text = st.empty()
-    generation_count = 1
+    generation_count = 0
     while generated_count < total_push_num:
         current_push_num = min(batch_size, total_push_num - generated_count)
         message.write(f"Generating notifications {generated_count + 1} to {generated_count + current_push_num}")
-        generation_count_text.write(f'Number of generations: {generation_count}')
+        generation_count_text.write(f'Number of generations: {generation_count + 1}')
         notifications = generate_push_notifications(
             geo, 
             holiday_name, 
@@ -453,7 +453,7 @@ if st.button("Generate Push Notifications"):
         )
         generation_count += 1
         
-        if generation_count > total_push_num:
+        if generation_count > total_push_num + 5:
             st.write('Too much generations. Please reload the script or change the input parameters')
             break
         
@@ -514,11 +514,11 @@ if st.button("Generate Push Notifications"):
     creative_push_num = int(push_num * 0.3)
     generated_count = 0
     generation_count_text_2 = st.empty()
-    generation_count = 1
+    generation_count = 0
     while generated_count < creative_push_num:
         current_push_num = min(batch_size, creative_push_num - generated_count)
         message_creative.write(f"Generating creative notifications {generated_count + 1} to {generated_count + current_push_num}")
-        generation_count_text_2.write(f'Number of generations: {generation_count}')
+        generation_count_text_2.write(f'Number of generations: {generation_count + 1}')
         notifications = generate_creative_push_notifications(
             geo, 
             holiday_name, 
@@ -531,7 +531,7 @@ if st.button("Generate Push Notifications"):
             current_push_num
         )
         generation_count += 1
-        if generation_count > creative_push_num:
+        if generation_count > creative_push_num + 5:
             st.write('Too much generations. Please reload the script or change the input parameters')
             break
         
