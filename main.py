@@ -453,7 +453,7 @@ if st.button("Generate Push Notifications"):
         )
         generation_count += 1
         
-        if generation_count > total_push_num // min(5, total_push_num):
+        if generation_count > total_push_num:
             st.write('Too much generations. Please reload the script or change the input parameters')
             break
         
@@ -531,7 +531,7 @@ if st.button("Generate Push Notifications"):
             current_push_num
         )
         generation_count += 1
-        if generation_count > creative_push_num // min(5, creative_push_num):
+        if generation_count > creative_push_num:
             st.write('Too much generations. Please reload the script or change the input parameters')
             break
         
