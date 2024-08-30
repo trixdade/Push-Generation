@@ -475,12 +475,12 @@ if st.button("Generate Push Notifications"):
                                              offer=offer)
         
         removed_offer_count = df.shape[0] - df_offer.shape[0]
-        st.write(f'Removed {removed_offer_count} without offer')
+        #st.write(f'Removed {removed_offer_count} without offer')
         
         # Фильтрация строк по длине title и description
         df_valid_length = filter_dataframe_by_length(df_offer, title_len=title_len, description_len=description_len)
         removed_length_count = df_offer.shape[0] - df_valid_length.shape[0]
-        st.write(f'Removed {removed_length_count} due to length constraints')
+        #st.write(f'Removed {removed_length_count} due to length constraints')
         
         # Обновляем количество сгенерированных уведомлений
         generated_count += df_valid_length.shape[0]
