@@ -1,10 +1,18 @@
 import streamlit as st
 import openai
+import pickle
 import pandas as pd
 import json
 import datetime
 import re
 from utils.emoji import remove_unnecessary_emojis
+from utils.inference import generate_random_dataframe, preprocess_transactions
+
+import numpy as np
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer
+
+from catboost import Pool, CatBoostClassifier
 
 st.title("Casino & Betting Push Notification Generator")
 
@@ -335,7 +343,7 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        model="gpt-4o",
+        model="gpt-4o-mini",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
         response_format={"type": "text"},
         temperature=0.2
@@ -418,7 +426,7 @@ def generate_creative_push_notifications(geo, holiday_name, offer, currency,
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        model="gpt-4o",
+        model="gpt-4o-mini",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
         response_format={"type": "text"},
         temperature=0.8
@@ -499,8 +507,68 @@ if st.button("Generate Push Notifications"):
              
     whole_df = whole_df.reset_index(drop=True)
     
-    whole_df['title_len'] = whole_df['title'].apply(len_with_emojis)
-    whole_df['description_len'] = whole_df['description'].apply(len_with_emojis)
+    #whole_df['title_len'] = whole_df['title'].apply(len_with_emojis)
+    #whole_df['description_len'] = whole_df['description'].apply(len_with_emojis)
+    
+    
+    st.write('Start scoring')
+    # SCORING PART
+    
+    whole_df.to_csv('whole_df.csv', index=False)
+    
+    print('Scoring part')
+    titles = whole_df['title'].values
+    descriptions = whole_df['description'].values
+    
+    # init model
+    labse_model = SentenceTransformer('sentence-transformers/LaBSE')
+    
+    title_embeddings = labse_model.encode(titles)
+    description_embeddings = labse_model.encode(descriptions)
+    
+    n_comp = 120
+    with open('./truncated_svd_model.pkl', 'rb') as file:
+        svd = pickle.load(file)
+
+    title_embeddings_svd = svd.transform(title_embeddings)
+    title_embeddings_svd = pd.DataFrame(data=title_embeddings_svd, columns=[f'PC_0_{i+1}' for i in range(n_comp)])
+
+    description_embeddings_svd = svd.transform(description_embeddings)
+    description_embeddings_svd = pd.DataFrame(data=description_embeddings_svd, columns=[f'PC_1_{i+1}' for i in range(n_comp)])
+
+    embs_df = pd.concat([title_embeddings_svd, description_embeddings_svd], axis=1)
+    
+    # generate df of random users
+    k = 300
+    user_df = generate_random_dataframe(K=k)
+    user_df = preprocess_transactions(user_df)
+    user_df = user_df.drop(columns=['createdAt'])
+    
+    catboost_model = CatBoostClassifier()
+    catboost_model.load_model("catboost.cbm")
+    cat_features = ['geo', 'device', 'os', 'osVersion', 'browser', 'part_of_day', 'day_of_week', 'is_business_day', 'month']
+    
+    scores = []
+    # concat user features with embeddings
+    for _, emb_row in embs_df.iterrows():
+        df_repeated = pd.concat([emb_row] * 50, ignore_index=True, axis=1).T
+        inference_df = pd.concat([user_df, df_repeated], axis=1)
+        
+        # Define the columns that you want to move to the end
+        cols_to_move = ['day_of_week', 'part_of_day', 'month', 'is_business_day']
+
+        all_columns = inference_df.columns.tolist()
+        remaining_columns = [col for col in all_columns if col not in cols_to_move]
+        new_column_order = remaining_columns + cols_to_move
+        inference_df = inference_df[new_column_order]
+        
+        predictions = catboost_model.predict_proba(inference_df)
+        scores.append(np.mean(predictions[:,1]))
+    
+    whole_df['score'] = scores
+    
+    # sort df by score
+    whole_df = whole_df.sort_values(by='score', ascending=False)
     
     message.empty()
     st.dataframe(whole_df)
@@ -538,11 +606,11 @@ if st.button("Generate Push Notifications"):
         notifications_content = notifications.choices[0].message.content
         notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
         notifications_json = json.loads(notifications_clear)
-        df = pd.DataFrame(notifications_json)
+        notifications_df = pd.DataFrame(notifications_json)
         
         # Фильтрация строк по длине title и description
-        df_valid_length = filter_dataframe_by_length(df, title_len=title_len, description_len=description_len)
-        removed_length_count = df.shape[0] - df_valid_length.shape[0]
+        df_valid_length = filter_dataframe_by_length(notifications_df, title_len=title_len, description_len=description_len)
+        removed_length_count = notifications_df.shape[0] - df_valid_length.shape[0]
         
         # Обновляем количество сгенерированных уведомлений
         generated_count += df_valid_length.shape[0]
@@ -561,8 +629,7 @@ if st.button("Generate Push Notifications"):
     # st.write(f'-------------------------------------------------------------')         
     whole_df_creative = whole_df_creative.reset_index(drop=True)
     
-    whole_df_creative['title_len'] = whole_df_creative['title'].apply(len_with_emojis)
-    whole_df_creative['description_len'] = whole_df_creative['description'].apply(len_with_emojis)
+    # whole_df_creative['title_len'] = whole_df_creative['title'].apply(len_with_emojis)
+    # whole_df_creative['description_len'] = whole_df_creative['description'].apply(len_with_emojis)
     message_creative.empty()
     st.dataframe(whole_df_creative)
-
