@@ -545,7 +545,7 @@ if st.button("Generate Push Notifications"):
     user_df = user_df.drop(columns=['createdAt'])
     
     catboost_model = CatBoostClassifier()
-    catboost_model.load_model("catboost.cbm")
+    catboost_model.load_model("catboost_w1-4.cbm")
     cat_features = ['geo', 'device', 'os', 'osVersion', 'browser', 'part_of_day', 'day_of_week', 'is_business_day', 'month']
     
     scores = []
