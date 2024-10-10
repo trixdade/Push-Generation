@@ -5,17 +5,18 @@ import pandas as pd
 import json
 import datetime
 import re
-from utils.emoji import remove_unnecessary_emojis
+from utils.emoji import remove_unnecessary_emojis, replace_or_add_emoji
 from utils.inference import generate_random_dataframe, preprocess_transactions
+from utils.prompts import get_examples, get_emoji_text, get_reg_text, get_bonus_code_text, get_guidelines, generate_system_prompt
+from utils.postprocessing import replace_abbr, filter_dataframe_by_offer, filter_dataframe_by_length
 
 import numpy as np
-from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 
-from catboost import Pool, CatBoostClassifier
+from catboost import CatBoostClassifier
+
 
 st.title("Casino & Betting Push Notification Generator")
-
 
 language = 'English'
 title_len = 30
@@ -47,278 +48,31 @@ source = st.selectbox('What source do you want to use?',
 
 user_reg = st.checkbox('User registered?')
 
-
 client = openai.OpenAI(
     api_key=st.secrets['OPENAI_API_KEY']
 )
 
-def get_examples(user_reg):
-    if not user_reg:
-        return """
-        {
-            "title": "🎰Add 50FS to your Welcome Pack",
-            "description": "THRILL! Enter code at Bizzo Casino|Limited!💰"
-        },
-        {
-            "title": "🎰Welcome Pack Boost|+50FS more",
-            "description": "Register and use code FROG|Slot of the Week Edition🐸"
-        },
-        {
-            "title": "🎲National Casino Fest|Add 50FS",
-            "description": "Join and type FEST for boost! Hurry⏱️"
-        }
-        """
-    else:
-        return """
-        {
-            "title": "🎰Summer Fest + 50% up to 100€",
-            "description": "Type FEST & join the fun! Limited time⏱️"
-        },
-        {
-            "title": "🎰Vegas Weekend| Add Xtra 50FS",
-            "description": "Type VEGAS for boosted deal! Ends SOON💰"
-        },
-        {
-            "title": "🦸Bizzo | Use HERO for rewards",
-            "description": "Superheroes Day w/ Super Prizes at Bizzo"
-        }
-        """
-
 examples_for_prompt = get_examples(user_reg)
-
-emoji_rules = """
-There are the rules of how to place emojis properly:
-1. If push contains words "Promotion, Offer, Deal, Reward, Special, Regular" 
-then use these emojis: 💡 ⚡ 💯 🫶 🙌 ✅ ✨ 🎇 💪 💖 🆕 🆓 💸 💵 📣 🔆 🔜 
-
-2. If push contains words "Casino, Spins, Jackpot, Slots, Games, Bet, Place a bet" 
-then use these emojis: 🎰 🎲  
-
-3. If push contains words "Money, Cash, Prize, Payout, Reward"
-then use these emojis: 💸 💵 💰 
-
-4. If push contains words "Birthday, Anniversary, Celebration, Party, Festival, Fest, Holiday, Special Day" 
-then use these emojis: 🎂 🥳 🎈 🎇 🎆 🪩 
-
-5. If push contains words "VIP, Exclusive, High Roller, Elite, Premier, Luxury, Privilege" 
-then use these emojis: 👑 💎 🎯 🏆 🎇
-
-6. If push contains words "Match, Game, Tournament, Championship, League, Contest, Competition"
-then use these emojis: ⚽ 🥇 🏆 💪 and countries flags
-
-7. If push contains words "Time-Limited, Limited, Hurry, Ends Soon, Time is running out, Only TODAY, Today only, Now, Last Chance" 
-then use these emojis: ⏳ ⏰ 🔔 ⌛ ⏱️ 🔜
-
-8. If push contains words "Summer, Wildwest, Oktoberfest, Sweet, Seasonal, Holiday, Festival"
-then use these emojis: 🤠 🏖️ 🍺 🍬 🍭 🌠 🎇 🎆 🪄  🪩 and countries flags (if it is local holiday)
-
-9. If push contains words "Unique, Special, Exclusive, Grand, Huge" 
-then use these emojis: 🧨 💣 💥 ⚡
-
-10. If push contains words "New, Fresh, Special, Launch, Release, Introduce, Unveiling"
-then use these emojis: 🆕 📣 💎💡 
-"""
-
-def get_emoji_text(emoji):
-    if emoji == 'No':
-        return "Make sure you do not use emojis."
-    else:
-        return """You must use emojis based on the generated text. Add insteresting emojis to the description, that fits the text.
-                    It can be flags, time-related emojis, crowns, diamonds etc.
-                    Please DO NOT use more than 1 emoji in title!"""
-
 emoji_text = get_emoji_text(emoji)
-
-def get_reg_text(user_reg, source):
-    reg_text = f'Be sure that you done all the guidelines. Let user know, that this is notification from {source}'
-    if not user_reg:
-        reg_text += f"""You must let user know, that this is notification from {source}.
-        Do it by using words like casino, bet, odds, free spins or just add the name of casino: {source}. 
-        Be sure that you do it."""
-        
-    if bonus_check:
-        bonus_check_text = f"You could mention, that user should register to enter bonus code: {bonus_code}"
-        reg_text += f'\n{bonus_check_text}' 
-            
-    return reg_text
-
-def replace_or_add_emoji(text):
-    # Регулярное выражение для поиска эмодзи в начале строки
-    emoji_pattern = r'^[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251\U0001F004\U0001F0CF\U0001F170-\U0001F171\U0001F17E-\U0001F17F\U0001F18E\U0001F191-\U0001F19A\U0001F1E6-\U0001F1FF\U0001F201-\U0001F202\U0001F21A\U0001F22F\U0001F232-\U0001F23A\U0001F250-\U0001F251\U0001F004\U0001F0CF\U0001F3E0-\U0001F3FF\U0001F004]+'
-
-    # Эмодзи слот-машины 🎰
-    slot_machine_emoji = "🎰"
-
-    # Проверка наличия эмодзи в начале текста
-    if re.match(emoji_pattern, text):
-        # Удаляем эмодзи и добавляем слот-машину
-        return re.sub(emoji_pattern, slot_machine_emoji, text, count=1)
-    else:
-        # Добавляем слот-машину в начало текста
-        return slot_machine_emoji + text
-
-    
-reg_text = get_reg_text(user_reg=user_reg, source=source)
-
-
-# POSTPROCESSING FUNCS
-def filter_dataframe_by_offer(df, columns, offer):
-    mask = df[columns].apply(lambda row: any(offer in str(row[col]) for col in columns), axis=1)
-    
-    # Фильтрация датафрейма по маске
-    filtered_df = df[mask]
-    return filtered_df
-
-def len_with_emojis(text):
-    """
-    Подсчитывает длину строки, учитывая, что каждый эмодзи считается за 2 символа.
-    
-    :param text: Строка, длину которой нужно подсчитать.
-    :return: Длина строки с учетом эмодзи.
-    """
-    # Регулярное выражение для поиска эмодзи
-    emoji_pattern = re.compile(
-        "[\U0001F600-\U0001F64F"  # Эмодзи со смайликами
-        "\U0001F300-\U0001F5FF"  # Символы и пиктограммы
-        "\U0001F680-\U0001F6FF"  # Транспортные средства и символы
-        "\U0001F1E0-\U0001F1FF"  # Флаги (с помощью пар региональных индикаторов)
-        "\U00002702-\U000027B0"  # Разные символы и пиктограммы
-        "\U000024C2-\U0001F251"  # Другие символы
-        "]+", flags=re.UNICODE)
-
-    # Находим все эмодзи в тексте
-    emojis = emoji_pattern.findall(text)
-    
-    # Считаем длину строки
-    total_length = len(text)
-    
-    # Корректируем длину, добавляя 1 за каждый эмодзи
-    emoji_count = len(emojis)
-    adjusted_length = total_length + emoji_count
-    
-    return adjusted_length
-
-def filter_dataframe_by_length(df, title_len, description_len):
-    mask = (df['title'].apply(len_with_emojis) <= title_len) & (df['description'].apply(len_with_emojis) <= description_len)
-    filtered_df = df[mask]
-    return filtered_df
-
-def capitalize_sentences(text):
-    def capitalize_first_letter(sentence):
-        # Найдем первую букву в предложении и сделаем её заглавной
-        for i, char in enumerate(sentence):
-            if char.isalpha():  # Проверяем, является ли символ буквой
-                return sentence[:i] + char.upper() + sentence[i+1:]
-        return sentence  # Если буквы не найдены, возвращаем предложение как есть
-
-    # Разбиваем текст на предложения, используя регулярное выражение
-    sentences = re.split('(?<=[.!?]) +', text)
-    
-    # Применяем функцию к каждому предложению
-    capitalized_sentences = [capitalize_first_letter(sentence) for sentence in sentences]
-    
-    # Собираем предложения обратно в текст
-    capitalized_text = ' '.join(capitalized_sentences)
-    
-    return capitalized_text
-
-def replace_abbr(df, title_len, description_len):
-    df['title_len'] = df['title'].apply(len_with_emojis)
-    df['description_len'] = df['description'].apply(len_with_emojis)
-    
-    # free spins addition
-    fs_len = len(' Free Spins') - len('FS')
-    code_len = len(' code')
-    # add the word 'code' if applicable 
-    if bonus_check:
-        df.title = df.apply(lambda row: row.title.replace(bonus_code, 'code ' + bonus_code) 
-                            if row.title_len + code_len < title_len else row.title, axis=1)
-        df.title = df.apply(lambda row: row.title.replace('code code', 'code'), axis=1)
-        df.title = df.title.apply(capitalize_sentences)
-        
-        df.description = df.apply(lambda row: row.description.replace(bonus_code, 'code ' + bonus_code)
-                                if row.description_len + code_len < description_len else row.description, axis=1)
-        df.description = df.apply(lambda row: row.description.replace('code code', 'code'), axis=1)
-        df.description = df.description.apply(capitalize_sentences)
-    
-    # refresh length
-    df['title_len'] = df['title'].apply(len_with_emojis)
-    df['description_len'] = df['description'].apply(len_with_emojis)
-    
-    # change FS 
-    df.title = df.apply(lambda row: row.title.replace('FS', ' Free Spins') 
-                        if row.title_len + fs_len < title_len else row.title, axis=1)
-    
-    df.description = df.apply(lambda row: row.description.replace('FS', ' Free Spins') 
-                              if row.description_len + fs_len < description_len else row.description, axis=1)
-    
-    # remove whitespaces
-    cols = ['title', 'description']
-    df[cols] = df[cols].apply(lambda x: x.str.strip())
-    
-    # remove created cols
-    df = df.drop(columns=['title_len', 'description_len'])
-
-    return df
+reg_text = get_reg_text(user_reg, source, bonus_check, bonus_code)
+bonus_code_text = get_bonus_code_text(bonus_check, bonus_code)
+guidelines_default = get_guidelines(title_len, description_len, emoji_text, bonus_code_text, reg_text, creative=False)
+guidelines_creative = get_guidelines(title_len, description_len, emoji_text, bonus_code_text, reg_text, creative=True)
 
 
 # Function to generate push notifications
 def generate_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num):
+                                bonus_code, language, title_len, description_len, push_num, creative=False):
+    
+    temperature = 0.8 if creative else 0.3
     
     character_padding = 2
-
     title_len = int(title_len) - character_padding
     description_len = int(description_len) - character_padding
     
-    system_prompt = f"""You are a creative copywriter specializing in generating engaging push notifications.
+    guidelines = guidelines_creative if creative else guidelines_default
     
-    Task: Write short, creative push notifications for a project name {source}. Notifications should be engaging and highlighting that the offer is time-limited.
-    Include a strong call to action, e.g. get/claim/join/enter/type/use. Use wordplay and incorporate humor to capture attention. 
-    Each notification must be based on the following parameters provided:
-
-    Geo: The geographic location of the target audience.
-    Holiday Name: The name of a holiday or some special day if there is one, to make the message relevant to current events. Could be sports events, classic holidays or just special days.
-    Offer: The actual value of the bonus code or discount being offered. Could be in %, but limited in some currency.
-    Currency: The currency relevant to the offer, if applicable.
-    Bonus Code: A specific code to be used if there is one. Don't make up your own bonus code.
-    Language: The language in which the notifications should be written.
-
-    Format the response as a JSON array with each notification having a "title" and "description".
-    Format:
-    [
-        {{
-            "title": "title_1"
-            "description": "description_1"
-        }}, 
-        {{
-            "title": "title_2"
-            "description": "description_2"
-        }}
-    ]
-
-    Example:
-    {examples_for_prompt}
-
-    Guidelines:
-    1. Notifications should be concise and compelling.\n
-    2. Incorporate playful language and humor where appropriate.\n
-    3. Ensure the message aligns with the parameters given for each notification.\n
-    4. Aim to capture the reader's interest quickly and motivate them to take action.\n
-    5. Each push notification title should be equal or less than {title_len} characters.\n
-    6. Each push notification description should be less than {description_len} characters\n
-    7. Each emoji is 2 characters, so be aware of it.
-    8. You can write value of the bonus in the title if it is impressive.\n
-    9. Properly write offer, word by word. Don't split the words within.
-    10. Write that offer is limited if applicable. Add phrases like offer ends soon, 
-    time is limited, now, deal expires soon, only today and etc. Try to make this time-related text short.\n
-    11. {emoji_text}\n
-    12. {"There is no bonus code in this push notification. Please do not make up your own bonus codes." if not bonus_check else f"Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description."}
-    13. {reg_text}
-    14. Please make sure that you wrote Offer fully word by word. Do not split it, just paste it somewhere.
-    15. Put bonus code in the beggining of title or description, do not put it at the end.
-    16. Response in JSON list format.\n
-    """
+    system_prompt = generate_system_prompt(source, examples_for_prompt, guidelines)
     
     user_prompt = f"""
     Generate {push_num} push notifications in {language} language, using these placeholders:
@@ -334,106 +88,23 @@ def generate_push_notifications(geo, holiday_name, offer, currency,
     Prority in push:
     1. Add call to action
     2. Try to incorporate Holiday Name creatively when generating the text
-    3. Point out that offer is time limited
-    4. Other rules
+    3. Add name of the source
+    4. Point out that offer is time limited
+    5. Other rules
     """
 
-    chat_completion = client.chat.completions.create(
+    notifications = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        model="gpt-4o-mini",
+        model="gpt-4o",
         max_tokens=int(push_num) * (int(title_len) + int(description_len)),
         response_format={"type": "text"},
-        temperature=0.2
+        temperature=temperature
     )
-    notifications = chat_completion
     return notifications
-
-
-
-def get_bonus_code_text(bonus_check):
-    if not bonus_check:
-        text = "There is no bonus code in this push notification. Please do not make up your own bonus codes." 
-    else:
-        text = f"""Be sure, that you add bonus code '{bonus_code}' somewhere in the beginning of the description.
-             You could add get/claim/join/enter/type/use before code"""
     
-
-
-def generate_creative_push_notifications(geo, holiday_name, offer, currency, 
-                                bonus_code, language, title_len, description_len, push_num):
-    
-    character_padding = 2
-
-    title_len = int(title_len) - character_padding
-    description_len = int(description_len) - character_padding
-    
-    system_prompt = f"""You are a creative copywriter specializing in generating engaging push notifications.
-    
-    Task: Write short, creative push notifications for a project name {source}. Notifications should be engaging and highlighting that the offer is time-limited.
-    Include a strong call to action, e.g. get/claim/join/enter/type/use. Use wordplay and incorporate humor to capture attention. 
-    Each notification must be based on the following parameters provided:
-
-    Geo: The geographic location of the target audience.
-    Holiday Name: The name of a holiday or some special day if there is one, to make the message relevant to current events. Could be sports events, classic holidays or just special days.
-    Offer: The actual value of the bonus code or discount being offered. Could be in %, but limited in some currency.
-    Currency: The currency relevant to the offer, if applicable.
-    Bonus Code: A specific code to be used if there is one. Don't make up your own bonus code.
-    Language: The language in which the notifications should be written.
-
-    Format the response as a JSON array with each notification having a "title" and "description".
-    Format:
-    [
-        {{
-            "title": "title_1"
-            "description": "description_1"
-        }}, 
-        {{
-            "title": "title_2"
-            "description": "description_2"
-        }}
-    ]
-
-    Example:
-    {examples_for_prompt}
-
-    Guidelines:
-    1. Notifications should be concise and compelling.\n
-    2. Incorporate playful language and humor where appropriate.\n
-    3. Ensure the message aligns with the parameters given for each notification.\n
-    5. Each push notification title should be equal or less than {title_len} characters.\n
-    6. Each push notification description should be less than {description_len} characters\n
-    7. {get_bonus_code_text(bonus_check)}
-    8. {"Use emojis based on the generated text. Please DO NOT use more than 1 emoji in title!" if emoji else "Make sure you do not use emojis."}
-    9. You can let user know, that this is notification from {source}. Add this name somewhere.
-    10. Response in JSON list format.\n
-    """
-    
-    user_prompt = f"""
-    Generate {push_num} push notifications in {language} language, using these placeholders:
-    1. Geo: {geo}
-    2. Holiday Name: {holiday_name}
-    3. Offer: {offer}
-    4. Bonus Code: {bonus_code}
-    5. Language: {language}
-    6. Currency: {currency}
-    """
-
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        model="gpt-4o-mini",
-        max_tokens=int(push_num) * (int(title_len) + int(description_len)),
-        response_format={"type": "text"},
-        temperature=0.8
-    )
-    notifications = chat_completion
-    return notifications
-
 
 # Button to generate notifications
 if st.button("Generate Push Notifications"): 
@@ -444,7 +115,13 @@ if st.button("Generate Push Notifications"):
     message = st.empty()
     generation_count_text = st.empty()
     generation_count = 0
+    empty_generation = 0
     while generated_count < total_push_num:
+        
+        # если больше 7 эпох не можем сгенерировать пуши, то прекращаем их генерировать
+        if empty_generation > 7:
+            break
+        
         current_push_num = min(batch_size, total_push_num - generated_count)
         message.write(f"Generating notifications {generated_count + 1} to {generated_count + current_push_num}")
         generation_count_text.write(f'Number of generations: {generation_count + 1}')
@@ -478,89 +155,72 @@ if st.button("Generate Push Notifications"):
             df.title = df.title.apply(replace_or_add_emoji)
         
         # Фильтрация строк без оффера
-        df_offer = filter_dataframe_by_offer(df, 
-                                             columns=['title', 'description'], 
-                                             offer=offer)
-        
-        removed_offer_count = df.shape[0] - df_offer.shape[0]
-        #st.write(f'Removed {removed_offer_count} without offer')
-        
+        df_offer = filter_dataframe_by_offer(df, ['title', 'description'], offer)
         # Фильтрация строк по длине title и description
-        df_valid_length = filter_dataframe_by_length(df_offer, title_len=title_len, description_len=description_len)
-        removed_length_count = df_offer.shape[0] - df_valid_length.shape[0]
-        #st.write(f'Removed {removed_length_count} due to length constraints')
+        df_valid_length = filter_dataframe_by_length(df_offer, title_len, description_len)
         
         # Обновляем количество сгенерированных уведомлений
         generated_count += df_valid_length.shape[0]
         
-        
         # убираем сокращения там, где это возможно
         if df_valid_length.shape[0] > 0:
-            df_valid_length = replace_abbr(df_valid_length, title_len=title_len, description_len=description_len)
-        
-        whole_df = pd.concat([whole_df, df_valid_length])
-        
-        removed_total = removed_offer_count + removed_length_count
-        # Если были удаленные строки, пересчитываем их для генерации
-        #if removed_total > 0:
-            #message.write(f"Regenerating {removed_total} notifications...")
+            df_valid_length = replace_abbr(df_valid_length, title_len, description_len, bonus_check, bonus_code)
+        else:
+            empty_generation += 1
              
+        whole_df = pd.concat([whole_df, df_valid_length])
+
     whole_df = whole_df.reset_index(drop=True)
-    
-    #whole_df['title_len'] = whole_df['title'].apply(len_with_emojis)
-    #whole_df['description_len'] = whole_df['description'].apply(len_with_emojis)
-    
-    
-    st.write('Start scoring')
+
     # SCORING PART
+    st.write('Start scoring')
     
-    whole_df.to_csv('whole_df.csv', index=False)
-    
-    print('Scoring part')
     titles = whole_df['title'].values
     descriptions = whole_df['description'].values
     
     # init model
-    labse_model = SentenceTransformer('sentence-transformers/LaBSE')
+    @st.cache_resource
+    def load_labse_model():
+        return SentenceTransformer('sentence-transformers/LaBSE')
+    
+    labse_model = load_labse_model()
     
     title_embeddings = labse_model.encode(titles)
     description_embeddings = labse_model.encode(descriptions)
     
-    n_comp = 120
-    with open('./truncated_svd_model.pkl', 'rb') as file:
-        svd = pickle.load(file)
+    n_comp = 300
+    with open('models/title_svd.pkl', 'rb') as file:
+        title_svd = pickle.load(file)
 
-    title_embeddings_svd = svd.transform(title_embeddings)
-    title_embeddings_svd = pd.DataFrame(data=title_embeddings_svd, columns=[f'PC_0_{i+1}' for i in range(n_comp)])
+    with open('models/desc_svd.pkl', 'rb') as file:
+        desc_svd = pickle.load(file)
 
-    description_embeddings_svd = svd.transform(description_embeddings)
-    description_embeddings_svd = pd.DataFrame(data=description_embeddings_svd, columns=[f'PC_1_{i+1}' for i in range(n_comp)])
+    title_embeddings_svd = title_svd.transform(title_embeddings)
+    title_embeddings_svd_df = pd.DataFrame(data=title_embeddings_svd, columns=[f'PC_0_{i+1}' for i in range(n_comp)])
 
-    embs_df = pd.concat([title_embeddings_svd, description_embeddings_svd], axis=1)
+    description_embeddings_svd = desc_svd.transform(description_embeddings)
+    description_embeddings_svd_df = pd.DataFrame(data=description_embeddings_svd, columns=[f'PC_1_{i+1}' for i in range(n_comp)])
+
+    embs_df = pd.concat([title_embeddings_svd_df, description_embeddings_svd_df], axis=1)
+
+    embs_df['title_embs'] = list(title_embeddings_svd)
+    embs_df['desc_embs'] = list(description_embeddings_svd)
+
     
     # generate df of random users
     k = 300
     user_df = generate_random_dataframe(K=k)
     user_df = preprocess_transactions(user_df)
-    user_df = user_df.drop(columns=['createdAt'])
+    user_df = user_df.drop_duplicates().reset_index(drop=True)
     
     catboost_model = CatBoostClassifier()
-    catboost_model.load_model("catboost_w1-4.cbm")
-    cat_features = ['geo', 'device', 'os', 'osVersion', 'browser', 'part_of_day', 'day_of_week', 'is_business_day', 'month']
+    catboost_model.load_model("models/catboost_10_10_v2.cbm")
     
     scores = []
     # concat user features with embeddings
     for _, emb_row in embs_df.iterrows():
-        df_repeated = pd.concat([emb_row] * 50, ignore_index=True, axis=1).T
+        df_repeated = pd.concat([emb_row] * user_df.shape[0], ignore_index=True, axis=1).T
         inference_df = pd.concat([user_df, df_repeated], axis=1)
-        
-        # Define the columns that you want to move to the end
-        cols_to_move = ['day_of_week', 'part_of_day', 'month', 'is_business_day']
-
-        all_columns = inference_df.columns.tolist()
-        remaining_columns = [col for col in all_columns if col not in cols_to_move]
-        new_column_order = remaining_columns + cols_to_move
-        inference_df = inference_df[new_column_order]
         
         predictions = catboost_model.predict_proba(inference_df)
         scores.append(np.mean(predictions[:,1]))
@@ -575,61 +235,3 @@ if st.button("Generate Push Notifications"):
     st.write(f'-------------------------------------------------------------')
     
     message_creative = st.empty()
-    # GENERATING CREATIVE NOTIFICATIONS
-    st.write("Notifications with less rules:")
-    batch_size = 10
-    whole_df_creative = pd.DataFrame([])
-    creative_push_num = int(push_num * 0.3)
-    generated_count = 0
-    generation_count_text_2 = st.empty()
-    generation_count = 0
-    while generated_count < creative_push_num:
-        current_push_num = min(batch_size, creative_push_num - generated_count)
-        message_creative.write(f"Generating creative notifications {generated_count + 1} to {generated_count + current_push_num}")
-        generation_count_text_2.write(f'Number of generations: {generation_count + 1}')
-        notifications = generate_creative_push_notifications(
-            geo, 
-            holiday_name, 
-            offer, 
-            currency, 
-            bonus_code, 
-            language, 
-            title_len, 
-            description_len, 
-            current_push_num
-        )
-        generation_count += 1
-        if generation_count > creative_push_num + 5:
-            st.write('Too much generations. Please reload the script or change the input parameters')
-            break
-        
-        notifications_content = notifications.choices[0].message.content
-        notifications_clear = notifications_content.replace('```json\n', '').replace('```', '')
-        notifications_json = json.loads(notifications_clear)
-        notifications_df = pd.DataFrame(notifications_json)
-        
-        # Фильтрация строк по длине title и description
-        df_valid_length = filter_dataframe_by_length(notifications_df, title_len=title_len, description_len=description_len)
-        removed_length_count = notifications_df.shape[0] - df_valid_length.shape[0]
-        
-        # Обновляем количество сгенерированных уведомлений
-        generated_count += df_valid_length.shape[0]
-        
-        # убираем сокращения там, где это возможно
-        if df_valid_length.shape[0] > 0:
-            df_valid_length = replace_abbr(df_valid_length, title_len=title_len, description_len=description_len)
-        
-        whole_df_creative = pd.concat([whole_df_creative, df_valid_length])
-
-        # Если были удаленные строки, пересчитываем их для генерации
-        # if removed_length_count > 0:
-        #     message_creative.write(f"Regenerating {removed_length_count} notifications...")
-            
-    
-    # st.write(f'-------------------------------------------------------------')         
-    whole_df_creative = whole_df_creative.reset_index(drop=True)
-    
-    # whole_df_creative['title_len'] = whole_df_creative['title'].apply(len_with_emojis)
-    # whole_df_creative['description_len'] = whole_df_creative['description'].apply(len_with_emojis)
-    message_creative.empty()
-    st.dataframe(whole_df_creative)
